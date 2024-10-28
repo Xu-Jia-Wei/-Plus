@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>弹球游戏 Demo</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        .container {
+            position: relative;
+            display: inline-block;
+            border: 1px solid black;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 0;
+        }
+        p {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            color: #aaa;
+        }
+        #ballCount {
+            color: #333;
+        }
+        #controls {
+            margin-top: 10px;
+            text-align: center;
+        }
+        button {
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>弹球游戏</h1>
+    <p>还剩多少个球: <span id="ballCount">0</span></p>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <div id="controls">
+        <label for="ballNumber">设置弹球数量:</label>
+        <input type="number" id="ballNumber" value="20" min="1" max="100">
+        <button id="startGame">开始游戏</button>
+    </div>
+</div>
+
+<script>
+// 获取画布和上下文
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+let balls = [];
+let ballCount = 0;
+let numberOfBalls = 20;
+let gameRunning = false;
+
+// 定义 Shape 构造器
+function Shape(x, y, velX, velY, exists) {
+    this.x = x;
+    this.y = y;
+    this.velX = velX;
+    this.velY = velY;
+    this.exists = exists;
+}
+
+// 定义 Ball 构造器
+function Ball(x, y, velX, velY, color, size) {
+    Shape.call(this, x, y, velX, velY, true);
+    this.color = color;
+    this.size = size;
+}
+
+Ball.prototype = Object.create(Shape.prototype);
+Ball.prototype.constructor = Ball;
+
+// 方法：绘制球
+Ball.prototype.draw = function() {
+    ctx.fillStyle = this.color;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.size, 0, 2 * Math.PI);
+    ctx.fill();
+};
+
+// 方法：更新球的位置
+Ball.prototype.update = function() {
+    if ((this.x + this.size) >= canvas.width) {
+        this.velX = -(this.velX);
+    }
+    if ((this.x - this.size) <= 0) {
+        this.velX = -(this.velX);
+    }
+    if ((this.y + this.size) >= canvas.height) {
+        this.velY = -(this.velY);
+    }
+    if ((this.y - this.size) <= 0) {
+        this.velY = -(this.velY);
+    }
+
+    this.x += this.velX;
+    this.y += this.velY;
+};
+
+// 方法：检测碰撞
+Ball.prototype.collisionDetect = function() {
+    for (let ball of balls) {
+        if (this !== ball && ball.exists) {
+            const dx = this.x - ball.x;
+            const dy = this.y - ball.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            if (distance < this.size + ball.size) {
+                ball.color = 'rgb(' + (Math.random() * 255) + ', ' +
+                             (Math.random() * 255) + ', ' +
+                             (Math.random() * 255) + ')';
+                ball.velX = -(ball.velX);
+                ball.velY = -(ball.velY);
+            }
+        }
+    }
+};
+
+// 定义 EvilCircle 构造器
+function EvilCircle(x, y) {
+    Shape.call(this, x, y, 0, 0, true);
+    this.color = 'gray'; // 圆环的颜色
+    this.size = 10; // 圆环的半径
+}
+
+EvilCircle.prototype = Object.create(Shape.prototype);
+EvilCircle.prototype.constructor = EvilCircle;
+
+// 方法：绘制恶魔圈
+EvilCircle.prototype.draw = function() {
+    ctx.strokeStyle = this.color;
+    ctx.lineWidth = 5; // 设定边框宽度
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.size, 0, 2 * Math.PI);
+    ctx.stroke();
+};
+
+// 方法：检查边界
+EvilCircle.prototype.checkBounds = function() {
+    if ((this.x + this.size) >= canvas.width) {
+        this.x = canvas.width - this.size;
+    }
+    if ((this.x - this.size) <= 0) {
+        this.x = this.size;
+    }
+    if ((this.y + this.size) >= canvas.height) {
+        this.y = canvas.height - this.size;
+    }
+    if ((this.y - this.size) <= 0) {
+        this.y = this.size;
+    }
+};
+
+// 方法：设置控制
+EvilCircle.prototype.setControls = function() {
+    window.onmousemove = (event) => {
+        this.x = event.offsetX;
+        this.y = event.offsetY;
+    };
+};
+
+// 方法：检测与弹球的碰撞
+EvilCircle.prototype.collisionDetect = function() {
+    for (let ball of balls) {
+        if (ball.exists) {
+            const dx = this.x - ball.x;
+            const dy = this.y - ball.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            if (distance < this.size + ball.size) {
+                ball.exists = false;
+                ballCount--;
+                document.getElementById('ballCount').innerText = ballCount;
+            }
+        }
+    }
+};
+
+// 创建弹球的函数
+function createBalls() {
+    balls = [];
+    ballCount = 0;
+    numberOfBalls = parseInt(document.getElementById('ballNumber').value) || 20;
+
+    while (balls.length < numberOfBalls) {
+        const size = Math.random() * 20 + 10;
+        const ball = new Ball(
+            Math.random() * (canvas.width - size * 2) + size,
+            Math.random() * (canvas.height - size * 2) + size,
+            Math.random() * 5 + 2,
+            Math.random() * 5 + 2,
+            'rgb(' + (Math.random() * 255) + ', ' +
+                    (Math.random() * 255) + ', ' +
+                    (Math.random() * 255) + ')',
+            size
+        );
+        balls.push(ball);
+        ballCount++;
+    }
+    document.getElementById('ballCount').innerText = ballCount;
+}
+
+// 创建恶魔圈
+const evilCircle = new EvilCircle(50, 50);
+evilCircle.setControls();
+
+// 游戏循环
+function loop() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    for (let ball of balls) {
+        if (ball.exists) {
+            ball.draw();
+            ball.update();
+            ball.collisionDetect();
+        }
+    }
+
+    evilCircle.draw();
+    evilCircle.checkBounds();
+    evilCircle.collisionDetect();
+
+    requestAnimationFrame(loop);
+}
+
+// 开始游戏的事件
+document.getElementById('startGame').addEventListener('click', function() {
+    createBalls();
+    if (!gameRunning) {
+        gameRunning = true;
+        loop();
+    }
+});
+</script>
+</body>
+</html>
